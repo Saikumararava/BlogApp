@@ -1,0 +1,9 @@
+﻿
+# React app ignores
+
+Frontend/my-react-app/node_modules
+
+Frontend/my-react-app/build
+
+Frontend/my-react-app/.env
+
