@@ -16,7 +16,7 @@ app.use((req, res, next) => {
 });
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
+// app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
 app.use(express.json()); // body parser for JSON
 
 // Routes (prefix with /api)
