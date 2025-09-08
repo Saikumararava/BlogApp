@@ -1,7 +1,8 @@
-// backend/src/app.js
+// Backend/src/app.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const morgan = require('morgan');
 
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./routes/posts');
@@ -9,49 +10,55 @@ const adminRoutes = require('./routes/admin');
 
 const app = express();
 
-// DEBUG: log every incoming request (temporary — remove when done)
-app.use((req, res, next) => {
-  console.log(`[REQ] ${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
-  next();
-});
+// ------- Logging (dev-friendly) -------
+app.use(morgan('tiny'));
 
-// ---- CORS configuration (flexible) ----
-// Support either FRONTEND_URL (single) or FRONTEND_URLS (CSV)
-const singleFrontend = (process.env.FRONTEND_URL || '').trim();
-const csvFrontends = (process.env.FRONTEND_URLS || '').trim();
-
-const allowedSet = new Set([
-  'http://localhost:3000',
-  'http://127.0.0.1:3000'
-]);
-
-if (singleFrontend) allowedSet.add(singleFrontend);
-if (csvFrontends) {
-  csvFrontends.split(',').map(s => s.trim()).filter(Boolean).forEach(s => allowedSet.add(s));
-}
-
-const allowedOrigins = Array.from(allowedSet);
-console.log('Allowed CORS origins (app.js):', allowedOrigins);
-
-// Use CORS middleware before other route handlers
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow non-browser requests (curl/postman) when origin is undefined
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    // Reject by returning false (no header added). Browser will block request.
-    console.warn('Blocked CORS origin:', origin);
-    return callback(null, false);
-  },
-  credentials: true,
-  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE'],
-  allowedHeaders: ['Content-Type','Authorization','Accept']
-}));
-
-// ---- Middleware ----
+// ------- Parse JSON -------
 app.use(express.json());
 
-// ---- Routes (mount after CORS and body parser) ----
+// ------- CORS configuration -------
+// ALLOWED_ORIGINS can be a comma-separated list set in Render/Vercel env:
+// ALLOWED_ORIGINS=http://localhost:3000,https://your-vercel-app.vercel.app
+const rawOrigins = process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || '';
+const allowedOrigins = rawOrigins
+  .split(',')
+  .map(s => s && s.trim())
+  .filter(Boolean);
+
+// If no explicit origins provided, default to allowing localhost for dev
+if (allowedOrigins.length === 0) {
+  allowedOrigins.push('http://localhost:3000');
+}
+
+// Log allowed origins so you can verify in Render logs
+console.log('CORS allowedOrigins =', allowedOrigins);
+
+// corsOptions with dynamic origin check
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (e.g., curl, server-to-server)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    } else {
+      // return error to browser (will be displayed as CORS error)
+      return callback(new Error('CORS policy: This origin is not allowed: ' + origin), false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  preflightContinue: false
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Ensure preflight (OPTIONS) requests get proper response
+app.options('*', cors(corsOptions));
+
+// ------- Routes (prefix with /api) -------
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/admin', adminRoutes);
@@ -59,11 +66,17 @@ app.use('/api/admin', adminRoutes);
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// 404 handler for API routes
+// 404 handler for API routes (catch-all under /api)
 app.use('/api', (req, res) => res.status(404).json({ message: 'API route not found' }));
 
 // Generic error handler (last)
 app.use((err, req, res, next) => {
+  // If this was a CORS origin error, respond with 403 and message
+  if (err && err.message && err.message.startsWith('CORS policy')) {
+    console.warn('CORS rejection:', err.message);
+    return res.status(403).json({ message: err.message });
+  }
+
   console.error(err && err.stack ? err.stack : err);
   const status = err.status || 500;
   const message = err.message || 'Internal Server Error';

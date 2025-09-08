@@ -1,15 +1,13 @@
-// Frontend: src/services/api.js
+// Frontend/my-react-app/src/services/api.js
 import axios from 'axios';
-import { getToken } from '../utils/auth';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const api = axios.create({
-  baseURL: `${API_BASE.replace(/\/$/, '')}/api` // ensure no trailing slash + add /api once
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api'
 });
 
+// optional: attach token automatically
 api.interceptors.request.use(cfg => {
-  const token = getToken();
+  const token = localStorage.getItem('token'); // or your token key
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
   return cfg;
 });
