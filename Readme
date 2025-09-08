@@ -1,0 +1,68 @@
+-------Blog Application (MERN)-----------
+This is a minimal **Blog Application** built with the MERN stack for a full-stack assessment.  
+It supports authentication(Jwt), role-based permissions(Admin,Author,User), publishing workflow, comments,posts,and pagination.
+
+-----Tech Stack--------
+- **Frontend:** React + Material-UI
+- **Backend:** Node.js + Express
+- **Database:** MongoDB (Atlas and Compass local)
+- **Auth:** Custom JWT (email + password, bcrypt password hashing)
+
+# -----Setup Steps------
+(Backend Steps)
+cd Backend
+npm init -y
+npm install express mongoose bcryptjs jsonwebtoken dotenv cors express-validator
+npm install -D nodemon
+To start Backend--> npm run dev
+(listens on port 5000 by default)
+
+(Frontend Steps)
+cd Frontend
+npx create-react-app .
+npm install @mui/material @emotion/react @emotion/styled @mui/icons-material axios react-router-dom
+To start Frontend App--> npm start
+(runs on port 3000)
+
+
+# For this project, I used custom JWT authentication
+To Keep everything self-contained for review.
+No external service setup required.
+Explicit control over tokens and role checks.
+
+# process
+User signs up → password hashed with bcryptjs.
+Backend signs a JWT with jsonwebtoken.
+Token stored in localStorage on frontend, sent with Authorization: Bearer <token> header.
+
+# Roles
+**APP_ADMIN **→ can manage everything, including promoting/demoting users.
+**AUTHOR** → can create, edit, and publish their own posts.
+**USER(default)** → can only view published posts and add comments.
+Role checks are enforced server-side in middleware, not just hidden in the UI.
+
+# -----API Testing (Postman)----
+I tested the full API using **Postman**.  
+A detailed **Word document** with test prompts, sample requests, and results (screenshots) is attached in the GitHub repo
+postman invite link also included for my postman account verification
+
+# Admin,Author,User seeded credentials
+
+•	Admin:
+o	Email: admin@example.com
+o	Password: Password123!
+o	Roles: [APP_ADMIN]
+•	Author:
+o	Email: author@example.com
+o	Password: Password123!
+o	Roles: [AUTHOR]
+•	User:
+o	Email: user@example.com
+o	Password: Password123!
+o	Roles: [USER]
+
+
+
+
+
+
