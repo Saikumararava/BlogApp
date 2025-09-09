@@ -3,12 +3,14 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const helmet = require('helmet');
 const compression = require('compression');
 
-const authRoutes = require('../routes/auth');
-const postRoutes = require('../routes/posts');
-const adminRoutes = require('../routes/admin');
+// ROUTES: app.js is inside src/ so routes are inside src/routes/
+const authRoutes = require('./routes/auth');
+const postRoutes = require('./routes/posts');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 
@@ -39,8 +41,7 @@ if (csvFrontends) {
   csvFrontends.split(',').map(s => s.trim()).filter(Boolean).forEach(s => allowedSet.add(s));
 }
 
-// If you want the backend to serve the frontend (single-service), set FRONTEND_URL to backend's public URL or set SERVE_CLIENT=true and FRONTEND_URL to that URL.
-// Also allow requests from render's internal host systems if needed (you can add more origins via FRONTEND_URLS)
+// If you want the backend to serve the frontend (single-service), set SERVE_CLIENT=true in env
 const allowedOrigins = Array.from(allowedSet);
 console.log('Allowed CORS origins (app.js):', allowedOrigins);
 
@@ -51,7 +52,7 @@ app.use(cors({
 
     if (allowedOrigins.includes(origin)) return callback(null, true);
 
-    // You can allow same-origin when the server serves client by comparing to an env var
+    // Allow same-origin when the server serves client by comparing to env var
     if (process.env.SERVE_CLIENT === 'true' && process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
       return callback(null, true);
     }
@@ -79,16 +80,46 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api', (req, res) => res.status(404).json({ message: 'API route not found' }));
 
 /* ---------- Optional: serve client build when using single-service deploy ---------- */
-/* Set SERVE_CLIENT=true in Render and ensure Frontend/build exists after build step */
+/* Set SERVE_CLIENT=true in Render (or env) and ensure Frontend/build exists after build step */
 if (process.env.SERVE_CLIENT === 'true') {
-  const clientBuildPath = path.join(__dirname, '..', 'Frontend', 'build');
-  app.use(express.static(clientBuildPath));
+  // Allow override via env if you know the exact path
+  const envPath = (process.env.FRONTEND_BUILD_PATH || '').trim();
+  const candidates = [];
 
-  // serve index.html for non-API routes
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API route not found' });
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  if (envPath) {
+    candidates.push(path.resolve(envPath));
+  } else {
+    // Common places relative to this file (src/)
+    candidates.push(path.join(__dirname, '..', 'Frontend', 'build'));      // Backend/src -> Backend/Frontend/build
+    candidates.push(path.join(__dirname, '..', '..', 'Frontend', 'build'));// Backend/src -> ../Frontend/build (if Backend and Frontend are siblings under project root)
+    candidates.push(path.join(__dirname, '..', '..', '..', 'Frontend', 'build'));// fallback
+    // Also try a typical "client" folder name
+    candidates.push(path.join(__dirname, '..', '..', 'client', 'build'));
+  }
+
+  // pick the first existing build path
+  const clientBuildPath = candidates.find(p => {
+    try {
+      return fs.existsSync(p) && fs.statSync(p).isDirectory();
+    } catch (e) {
+      return false;
+    }
   });
+
+  if (!clientBuildPath) {
+    console.warn('SERVE_CLIENT=true but no Frontend build found. Tried:', candidates);
+    console.warn('Set FRONTEND_BUILD_PATH to the absolute path of your build directory or ensure build exists in a common location.');
+  } else {
+    console.log('Serving client from:', clientBuildPath);
+    app.use(express.static(clientBuildPath));
+
+    // serve index.html for non-API routes
+    // Use a regex to avoid path-to-regexp issues with '*' on some environments:
+    // match any path that does NOT start with /api
+    app.get(/^(?!\/api).*/, (req, res) => {
+      res.sendFile(path.join(clientBuildPath, 'index.html'));
+    });
+  }
 }
 
 /* ---------- Generic error handler (last) ---------- */
