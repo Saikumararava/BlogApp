@@ -1,17 +1,21 @@
-// Frontend: src/services/api.js
+// Frontend/src/services/api.js
 import axios from 'axios';
-import { getToken } from '../utils/auth';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_ENV = (process.env.REACT_APP_API_URL || '').replace(/\/$/, ''); // remove trailing slash
+// If REACT_APP_API_URL is set (production), use that + /api. Otherwise use relative /api for local dev.
+const baseURL = API_ENV ? `${API_ENV}/api` : '/api';
 
 const api = axios.create({
-  baseURL: `${API_BASE.replace(/\/$/, '')}/api` // ensure no trailing slash + add /api once
+  baseURL,
+  // Optionally include credentials if your backend uses cookies:
+  // withCredentials: true
 });
 
-api.interceptors.request.use(cfg => {
-  const token = getToken();
-  if (token) cfg.headers.Authorization = `Bearer ${token}`;
-  return cfg;
-});
+// Example: attach token if you store it in localStorage
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('token'); // or your auth helper
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+}, err => Promise.reject(err));
 
 export default api;
